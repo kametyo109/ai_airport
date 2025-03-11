@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 import json
 import os
+import pandas as pd
 
 # Initialize session state for islands if not exists
 if 'islands' not in st.session_state:
@@ -83,6 +84,62 @@ def get_random_lines(text, count=3):
     # Get random lines
     return random.sample(lines, min(count, len(lines)))
 
+def display_static_html_view(island_id):
+    """Display an extremely simple HTML view of random ideas for ChatGPT"""
+    if island_id not in st.session_state.islands:
+        html = """
+        <html>
+        <body>
+            <h1>Error: Island not found</h1>
+        </body>
+        </html>
+        """
+        st.markdown(html, unsafe_allow_html=True)
+        return
+
+    island = st.session_state.islands[island_id]
+
+    # Get random lines
+    random_lines = get_random_lines(island.get("content", ""), 3)
+
+    # Create extremely simple HTML with no JavaScript dependencies
+    html = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+        <h1>Island: {island['name']}</h1>
+        <p>Here are 3 random ideas from this island:</p>
+    """
+
+    if not random_lines:
+        html += "<p>No ideas available on this island yet.</p>"
+    else:
+        for i, line in enumerate(random_lines):
+            html += f"<p><strong>Idea {i+1}:</strong> {line}</p>"
+
+    html += """
+    </body>
+    </html>
+    """
+
+    # Render raw HTML and disable all Streamlit elements
+    st.markdown(html, unsafe_allow_html=True)
+
+    # Hide all Streamlit elements
+    st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden !important;}
+    footer {visibility: hidden !important;}
+    header {visibility: hidden !important;}
+    .block-container {padding-top: 0 !important; padding-bottom: 0 !important;}
+    section.main {padding: 0 !important;}
+    div.stApp {
+        margin: 0;
+        padding: 0;
+        background-color: white;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 def main():
     st.title("Idea Islands")
 
@@ -153,11 +210,10 @@ def main():
             st.markdown("### Your Island Links")
 
             # Display a table with island names and their URLs
-            import pandas as pd
             data = []
             for island_id, island in st.session_state.islands.items():
-                # Use the text view format which works better with ChatGPT
-                island_url = f"{base_url}?view=text&island_id={island_id}"
+                # Use the static HTML view format which works better with ChatGPT
+                island_url = f"{base_url}?view=static&island_id={island_id}"
                 data.append({
                     "Island Name": island['name'],
                     "URL": island_url,
@@ -173,8 +229,8 @@ def main():
                 st.markdown("### Individual Islands")
                 for island_id, island in st.session_state.islands.items():
                     with st.expander(f"🏝️ {island['name']}"):
-                        # Use the text view format
-                        island_url = f"{base_url}?view=text&island_id={island_id}"
+                        # Use the static HTML view format
+                        island_url = f"{base_url}?view=static&island_id={island_id}"
                         st.code(island_url)
                         st.markdown("**ChatGPT Instruction:**")
                         st.markdown(f"""
@@ -187,46 +243,17 @@ def main():
         else:
             st.info("Enter your deployed Streamlit app URL to see the links ChatGPT can access.")
 
-def display_text_view(island_id):
-    """Display a simple text view of random ideas for ChatGPT"""
-    if island_id not in st.session_state.islands:
-        st.write("Error: Island not found")
-        return
-
-    island = st.session_state.islands[island_id]
-
-    # Get random lines
-    random_lines = get_random_lines(island.get("content", ""), 3)
-
-    st.title(f"Island: {island['name']}")
-    st.write("Here are 3 random ideas from this island:")
-
-    if not random_lines:
-        st.write("No ideas available on this island yet.")
-    else:
-        for i, line in enumerate(random_lines):
-            st.write(f"Idea {i+1}: {line}")
-
-    # Hidden styles to make this page very simple for ChatGPT
-    st.markdown("""
-    <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    </style>
-    """, unsafe_allow_html=True)
-
 def handle_app_view():
     """Handle different app views based on query params"""
-    # Check if we're in text view mode (for ChatGPT access)
+    # Check if we're in static view mode (for ChatGPT access)
     view = st.query_params.get("view", "")
 
-    if view == "text":
+    if view == "static":
         island_id = st.query_params.get("island_id", "")
 
-        if island_id and island_id in st.session_state.islands:
-            # Display the text view
-            display_text_view(island_id)
+        if island_id:
+            # Display the static HTML view
+            display_static_html_view(island_id)
             return True
 
     # Default to main app
