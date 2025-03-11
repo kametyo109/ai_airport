@@ -132,8 +132,6 @@ def main():
         st.text_input("Island Name", key="new_island_name")
         st.button("Create Island", on_click=create_island)
 
-    # This is the updated code for the API Access tab section of your main() function
-
     with tab3:
         st.header("API Access for ChatGPT")
         st.markdown("""
@@ -149,24 +147,25 @@ def main():
         """)
 
         base_url = st.text_input("Your Streamlit app URL (e.g., https://your-app-domain.streamlit.app)",
-                                placeholder="Enter your deployed app URL")
+                             placeholder="Enter your deployed app URL")
 
         if base_url:
             st.markdown("### Your Island Links")
 
             # Display a table with island names and their URLs
+            import pandas as pd
             data = []
             for island_id, island in st.session_state.islands.items():
-                island_url = f"{base_url}/island/{island_id}"
+                # Use the JSON endpoint format which works better with ChatGPT
+                island_url = f"{base_url}?view=json&island_id={island_id}"
                 data.append({
                     "Island Name": island['name'],
                     "URL": island_url,
-                    "ChatGPT Instruction": f"Please visit {island_url} and fetch 3 random ideas from this island."
+                    "ChatGPT Instruction": f"Please visit {island_url} and return the 3 random ideas from this island."
                 })
 
             # If there are islands, display them in a dataframe
             if data:
-                import pandas as pd
                 df = pd.DataFrame(data)
                 st.dataframe(df, hide_index=True, use_container_width=True)
 
@@ -174,12 +173,13 @@ def main():
                 st.markdown("### Individual Islands")
                 for island_id, island in st.session_state.islands.items():
                     with st.expander(f"🏝️ {island['name']}"):
-                        island_url = f"{base_url}/island/{island_id}"
+                        # Use the JSON endpoint format
+                        island_url = f"{base_url}?view=json&island_id={island_id}"
                         st.code(island_url)
                         st.markdown("**ChatGPT Instruction:**")
                         st.markdown(f"""
                         ```
-                        Please visit {island_url} and fetch 3 random ideas from this island named "{island['name']}".
+                        Please visit {island_url} and return the 3 random ideas from this island named "{island['name']}".
                         ```
                         """)
             else:
@@ -187,36 +187,43 @@ def main():
         else:
             st.info("Enter your deployed Streamlit app URL to see the links ChatGPT can access.")
 
+def display_json_response(island_id):
+    """Display JSON response for an island"""
+    if island_id not in st.session_state.islands:
+        return json.dumps({"error": "Island not found"})
 
-# Function to handle API requests (for deployment)
-def handle_api_requests():
-    # Get the requested path using the updated method
-    path = st.query_params.get("_path", "")
+    island = st.session_state.islands[island_id]
 
-    # For island-specific pages
-    if path.startswith("/island/"):
-        island_id = path.split("/")[-1]
-        if island_id in st.session_state.islands:
-            island = st.session_state.islands[island_id]
-            st.title(f"Island: {island['name']}")
+    # Get random lines
+    random_lines = get_random_lines(island.get("content", ""), 3)
 
-            # Ensure content key exists
-            if 'content' not in island:
-                island['content'] = ""
+    # Format response
+    response = {
+        "island_name": island["name"],
+        "ideas": [f"Idea {i+1}: {line}" for i, line in enumerate(random_lines)]
+    }
 
-            # Display random lines for ChatGPT
-            random_lines = get_random_lines(island["content"], 3)
-            st.subheader("3 Random Ideas from this Island")
-            if random_lines:
-                for i, line in enumerate(random_lines):
-                    st.markdown(f"**Idea {i+1}:** {line}")
-            else:
-                st.info("No ideas available on this island yet.")
+    return json.dumps(response)
 
-            return
+def handle_app_view():
+    """Handle different app views based on query params"""
+    # Check if we're in JSON view mode (for ChatGPT access)
+    view = st.query_params.get("view", "")
 
-    # Continue with the main app if not an API request
-    main()
+    if view == "json":
+        island_id = st.query_params.get("island_id", "")
+
+        if island_id and island_id in st.session_state.islands:
+            # Return JSON response
+            json_response = display_json_response(island_id)
+            st.json(json_response)
+            return True
+
+    # Default to main app
+    return False
 
 if __name__ == "__main__":
-    handle_api_requests()
+    # First check if we should display a special view
+    if not handle_app_view():
+        # If not, show the main app
+        main()
