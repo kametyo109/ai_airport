@@ -1,6 +1,7 @@
 # fastapi_server.py
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
 import uvicorn
 import json
 import os
@@ -10,13 +11,13 @@ from datetime import datetime
 # Initialize FastAPI app
 app = FastAPI(title="Idea Islands API")
 
-# Add CORS middleware to allow cross-origin requests
+# Add CORS middleware with settings allowing ALL origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allow all origins
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
 )
 
 # Path to the shared data file
@@ -64,6 +65,32 @@ async def root():
         "usage": "Use /api/islands/{island_id}/random to get random ideas from an island"
     }
 
+# Root route with HTML response
+@app.get("/html", response_class=HTMLResponse)
+async def root_html():
+    return """
+    <html>
+        <head>
+            <title>Idea Islands API</title>
+            <style>
+                body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                h1 { color: #333; }
+                p { line-height: 1.6; }
+                .endpoint { background-color: #f4f4f4; padding: 10px; border-radius: 4px; font-family: monospace; }
+            </style>
+        </head>
+        <body>
+            <h1>Idea Islands API</h1>
+            <p>The API is running successfully. Use the following endpoints:</p>
+            <ul>
+                <li class="endpoint">/api/islands - List all islands</li>
+                <li class="endpoint">/api/islands/{island_id}/random - Get random ideas from an island</li>
+                <li class="endpoint">/api/islands/{island_id}/html - Get random ideas in HTML format</li>
+            </ul>
+        </body>
+    </html>
+    """
+
 # List all islands
 @app.get("/api/islands")
 async def list_islands():
@@ -78,7 +105,45 @@ async def list_islands():
 
     return result
 
-# Get random ideas from a specific island
+# HTML version of islands list
+@app.get("/api/islands/html", response_class=HTMLResponse)
+async def list_islands_html():
+    islands = load_islands()
+
+    html = """
+    <html>
+        <head>
+            <title>Islands List</title>
+            <style>
+                body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                h1 { color: #333; }
+                .island { margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+            </style>
+        </head>
+        <body>
+            <h1>Available Islands</h1>
+    """
+
+    if not islands:
+        html += "<p>No islands found.</p>"
+    else:
+        for island_id, island in islands.items():
+            html += f"""
+            <div class="island">
+                <h2>{island['name']}</h2>
+                <p>ID: {island_id}</p>
+                <p>Random ideas URL: <a href="/api/islands/{island_id}/html">/api/islands/{island_id}/html</a></p>
+            </div>
+            """
+
+    html += """
+        </body>
+    </html>
+    """
+
+    return html
+
+# Get random ideas from a specific island (JSON)
 @app.get("/api/islands/{island_id}/random")
 async def get_random_ideas(island_id: str, count: int = 3):
     islands = load_islands()
@@ -99,6 +164,89 @@ async def get_random_ideas(island_id: str, count: int = 3):
         "ideas": formatted_ideas
     }
 
+# Get random ideas from a specific island (HTML)
+@app.get("/api/islands/{island_id}/html", response_class=HTMLResponse)
+async def get_random_ideas_html(island_id: str, count: int = 3):
+    islands = load_islands()
+
+    if island_id not in islands:
+        return """
+        <html>
+            <head>
+                <title>Island Not Found</title>
+                <style>
+                    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                    h1 { color: #d9534f; }
+                </style>
+            </head>
+            <body>
+                <h1>Island Not Found</h1>
+                <p>The requested island does not exist.</p>
+            </body>
+        </html>
+        """
+
+    island = islands[island_id]
+
+    # Get random lines
+    random_lines = get_random_lines(island.get("content", ""), count)
+
+    html = f"""
+    <html>
+        <head>
+            <title>Random Ideas from {island["name"]}</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
+                h1 {{ color: #333; }}
+                .idea {{ padding: 10px; margin-bottom: 10px; background-color: #f9f9f9; border-radius: 4px; }}
+            </style>
+        </head>
+        <body>
+            <h1>Random Ideas from Island: {island["name"]}</h1>
+    """
+
+    if not random_lines:
+        html += "<p>No ideas available on this island.</p>"
+    else:
+        for i, line in enumerate(random_lines):
+            html += f"""
+            <div class="idea">
+                <strong>Idea {i+1}:</strong> {line}
+            </div>
+            """
+
+    html += """
+        </body>
+    </html>
+    """
+
+    return html
+
+# Plain text version for maximum compatibility
+@app.get("/api/islands/{island_id}/text")
+async def get_random_ideas_text(island_id: str, count: int = 3):
+    islands = load_islands()
+
+    if island_id not in islands:
+        return {"error": "Island not found"}
+
+    island = islands[island_id]
+
+    # Get random lines
+    random_lines = get_random_lines(island.get("content", ""), count)
+
+    # Build a plain text response
+    response_text = f"Random Ideas from Island: {island['name']}\n\n"
+
+    if not random_lines:
+        response_text += "No ideas available on this island."
+    else:
+        for i, line in enumerate(random_lines):
+            response_text += f"Idea {i+1}: {line}\n"
+
+    return {"text": response_text}
+
 # Run the FastAPI server when this file is executed directly
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
