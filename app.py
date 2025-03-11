@@ -132,6 +132,8 @@ def main():
         st.text_input("Island Name", key="new_island_name")
         st.button("Create Island", on_click=create_island)
 
+    # This is the updated code for the API Access tab section of your main() function
+
     with tab3:
         st.header("API Access for ChatGPT")
         st.markdown("""
@@ -143,22 +145,48 @@ def main():
         1. Enter each idea on a separate line in your island's content
         2. When ChatGPT visits the island URL, it will see 3 randomly selected ideas
 
-        **Sample URLs for your islands:**
+        **Island URLs:**
         """)
 
         base_url = st.text_input("Your Streamlit app URL (e.g., https://your-app-domain.streamlit.app)",
-                                 placeholder="Enter your deployed app URL")
+                                placeholder="Enter your deployed app URL")
 
         if base_url:
-            for island_id, island in st.session_state.islands.items():
-                st.code(f"{base_url}/island/{island_id}")
-                st.markdown(f"""
-                **Instructions for ChatGPT:**
+            st.markdown("### Your Island Links")
 
-                "Please visit {base_url}/island/{island_id} and fetch 3 random ideas from this island."
-                """)
+            # Display a table with island names and their URLs
+            data = []
+            for island_id, island in st.session_state.islands.items():
+                island_url = f"{base_url}/island/{island_id}"
+                data.append({
+                    "Island Name": island['name'],
+                    "URL": island_url,
+                    "ChatGPT Instruction": f"Please visit {island_url} and fetch 3 random ideas from this island."
+                })
+
+            # If there are islands, display them in a dataframe
+            if data:
+                import pandas as pd
+                df = pd.DataFrame(data)
+                st.dataframe(df, hide_index=True, use_container_width=True)
+
+                # Also provide individual sections for easy copy-paste
+                st.markdown("### Individual Islands")
+                for island_id, island in st.session_state.islands.items():
+                    with st.expander(f"🏝️ {island['name']}"):
+                        island_url = f"{base_url}/island/{island_id}"
+                        st.code(island_url)
+                        st.markdown("**ChatGPT Instruction:**")
+                        st.markdown(f"""
+                        ```
+                        Please visit {island_url} and fetch 3 random ideas from this island named "{island['name']}".
+                        ```
+                        """)
+            else:
+                st.info("You don't have any islands yet. Create one in the 'Create Island' tab!")
         else:
             st.info("Enter your deployed Streamlit app URL to see the links ChatGPT can access.")
+
 
 # Function to handle API requests (for deployment)
 def handle_api_requests():
