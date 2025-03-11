@@ -156,8 +156,8 @@ def main():
             import pandas as pd
             data = []
             for island_id, island in st.session_state.islands.items():
-                # Use the JSON endpoint format which works better with ChatGPT
-                island_url = f"{base_url}?view=json&island_id={island_id}"
+                # Use the text view format which works better with ChatGPT
+                island_url = f"{base_url}?view=text&island_id={island_id}"
                 data.append({
                     "Island Name": island['name'],
                     "URL": island_url,
@@ -173,8 +173,8 @@ def main():
                 st.markdown("### Individual Islands")
                 for island_id, island in st.session_state.islands.items():
                     with st.expander(f"🏝️ {island['name']}"):
-                        # Use the JSON endpoint format
-                        island_url = f"{base_url}?view=json&island_id={island_id}"
+                        # Use the text view format
+                        island_url = f"{base_url}?view=text&island_id={island_id}"
                         st.code(island_url)
                         st.markdown("**ChatGPT Instruction:**")
                         st.markdown(f"""
@@ -187,36 +187,46 @@ def main():
         else:
             st.info("Enter your deployed Streamlit app URL to see the links ChatGPT can access.")
 
-def display_json_response(island_id):
-    """Display JSON response for an island"""
+def display_text_view(island_id):
+    """Display a simple text view of random ideas for ChatGPT"""
     if island_id not in st.session_state.islands:
-        return json.dumps({"error": "Island not found"})
+        st.write("Error: Island not found")
+        return
 
     island = st.session_state.islands[island_id]
 
     # Get random lines
     random_lines = get_random_lines(island.get("content", ""), 3)
 
-    # Format response
-    response = {
-        "island_name": island["name"],
-        "ideas": [f"Idea {i+1}: {line}" for i, line in enumerate(random_lines)]
-    }
+    st.title(f"Island: {island['name']}")
+    st.write("Here are 3 random ideas from this island:")
 
-    return json.dumps(response)
+    if not random_lines:
+        st.write("No ideas available on this island yet.")
+    else:
+        for i, line in enumerate(random_lines):
+            st.write(f"Idea {i+1}: {line}")
+
+    # Hidden styles to make this page very simple for ChatGPT
+    st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
 
 def handle_app_view():
     """Handle different app views based on query params"""
-    # Check if we're in JSON view mode (for ChatGPT access)
+    # Check if we're in text view mode (for ChatGPT access)
     view = st.query_params.get("view", "")
 
-    if view == "json":
+    if view == "text":
         island_id = st.query_params.get("island_id", "")
 
         if island_id and island_id in st.session_state.islands:
-            # Return JSON response
-            json_response = display_json_response(island_id)
-            st.json(json_response)
+            # Display the text view
+            display_text_view(island_id)
             return True
 
     # Default to main app
