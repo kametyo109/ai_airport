@@ -1,5 +1,4 @@
 import streamlit as st
-import random
 import uuid
 from datetime import datetime
 import json
@@ -70,22 +69,8 @@ def update_island_content(island_id):
     save_islands(st.session_state.islands)
     st.success("Content updated successfully!")
 
-def get_random_lines(text, count=3):
-    """Get random lines from a text blob"""
-    if not text or not isinstance(text, str) or not text.strip():
-        return []
-
-    # Split text into lines, filtering out empty lines
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-
-    if not lines:
-        return []
-
-    # Get random lines
-    return random.sample(lines, min(count, len(lines)))
-
 def main():
-    st.title("Idea Islands")
+    st.title("Island Content Manager")
 
     tab1, tab2, tab3 = st.tabs(["Islands Dashboard", "Create Island", "API Access"])
 
@@ -106,7 +91,7 @@ def main():
                         value=island["content"],
                         height=300,
                         key=f"island_content_{island_id}",
-                        help="Enter your ideas, one per line. Each line will be treated as a separate idea."
+                        help="Enter the content for this island. Each line will be displayed as written."
                     )
                     st.button("Save Changes", key=f"save_btn_{island_id}",
                               on_click=update_island_content, args=(island_id,))
@@ -118,39 +103,29 @@ def main():
                     updated_time = datetime.fromisoformat(island["updated_at"]).strftime("%Y-%m-%d %H:%M:%S")
                     st.caption(f"Last updated: {updated_time}")
 
-                    # Preview random lines
-                    if st.button("Preview 3 Random Ideas", key=f"random_{island_id}"):
-                        random_lines = get_random_lines(island["content"])
-                        if random_lines:
-                            st.write("Random Ideas (as would be seen by ChatGPT):")
-                            for i, line in enumerate(random_lines):
-                                st.info(f"Idea {i+1}: {line}")
-                        else:
-                            st.warning("No ideas found! Add some content (one idea per line).")
-
     with tab2:
         st.header("Create a New Island")
         st.text_input("Island Name", key="new_island_name")
         st.button("Create Island", on_click=create_island)
 
     with tab3:
-        st.header("API Access for ChatGPT")
+        st.header("API Access")
         st.markdown("""
-        ### How to Access Islands with ChatGPT
+        ### How to Access Islands
 
-        Each island has a unique API endpoint that ChatGPT can access. Use ChatGPT's task feature to fetch ideas from your islands.
+        Each island has a unique API endpoint that can be accessed to view its content.
 
         **Usage Instructions:**
-        1. Enter each idea on a separate line in your island's content
-        2. When ChatGPT visits the API endpoint, it will receive ideas from your island
+        1. Enter content in your island
+        2. When visiting the API endpoint, you will see the exact content as written
 
-        **Important:** Make sure to enter your FastAPI URL below (not your Streamlit URL)
+        **Important:** Make sure to enter your API URL below (not your Streamlit URL)
         """)
 
-        # Get the FastAPI base URL - this needs to point to your Render deployment
+        # Get the API base URL - this needs to point to your Render deployment
         api_base_url = st.text_input(
-            "Your FastAPI base URL (e.g., https://ai-airport.onrender.com)",
-            placeholder="Enter your deployed FastAPI base URL (no trailing slash)",
+            "Your API base URL (e.g., https://ai-airport.onrender.com)",
+            placeholder="Enter your deployed API base URL (no trailing slash)",
             help="This should be your Render API URL, not your Streamlit URL"
         )
 
@@ -164,14 +139,10 @@ def main():
             # Display a table with island names and their API endpoints
             data = []
             for island_id, island in st.session_state.islands.items():
-                # URLs for different endpoints
-                random_html_url = f"{api_base_url}/api/islands/{island_id}/html"
-                all_html_url = f"{api_base_url}/api/islands/{island_id}/all/html"
-
+                api_url = f"{api_base_url}/api/islands/{island_id}/html"
                 data.append({
                     "Island Name": island['name'],
-                    "Random Ideas URL": random_html_url,
-                    "All Ideas URL": all_html_url
+                    "Content URL": api_url
                 })
 
             # If there are islands, display them in a dataframe
@@ -183,32 +154,20 @@ def main():
                 st.markdown("### Individual Islands")
                 for island_id, island in st.session_state.islands.items():
                     with st.expander(f"🏝️ {island['name']}"):
-                        # Random ideas endpoint
-                        random_api_url = f"{api_base_url}/api/islands/{island_id}/html"
-                        st.markdown("**Random Ideas Endpoint:**")
-                        st.code(random_api_url)
+                        api_url = f"{api_base_url}/api/islands/{island_id}/html"
+                        st.markdown("**Content URL:**")
+                        st.code(api_url)
 
-                        # All ideas endpoint
-                        all_api_url = f"{api_base_url}/api/islands/{island_id}/all/html"
-                        st.markdown("**All Ideas Endpoint:**")
-                        st.code(all_api_url)
-
-                        st.markdown("**ChatGPT Instructions:**")
+                        st.markdown("**Instructions:**")
                         st.markdown(f"""
-                        For random ideas:
                         ```
-                        Please visit {random_api_url} and return the random ideas from this island named "{island['name']}".
-                        ```
-
-                        For all ideas:
-                        ```
-                        Please visit {all_api_url} and return all the ideas from this island named "{island['name']}".
+                        Please visit {api_url} to view the content of this island.
                         ```
                         """)
             else:
                 st.info("You don't have any islands yet. Create one in the 'Create Island' tab!")
         else:
-            st.warning("Please enter your FastAPI base URL (from Render) to see the API endpoints.")
+            st.warning("Please enter your API base URL (from Render) to see the API endpoints.")
 
         # Info about data sharing between platforms
         st.markdown("""
@@ -217,12 +176,12 @@ def main():
         Your islands data is stored locally in each platform:
 
         - Data created in Streamlit Cloud stays in Streamlit Cloud
-        - Data created in your FastAPI server on Render stays on Render
+        - Data created in your API server on Render stays on Render
 
-        To use ideas created here with ChatGPT, you need to:
+        To use content created here, you need to:
 
         1. Create and edit your islands in this Streamlit app
-        2. Copy the content manually to your FastAPI server on Render or vice versa
+        2. Copy the content manually to your API server on Render or vice versa
 
         For a production setup, consider using a shared database like MongoDB Atlas.
         """)

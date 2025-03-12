@@ -5,11 +5,10 @@ from fastapi.responses import HTMLResponse, JSONResponse
 import uvicorn
 import json
 import os
-import random
 from datetime import datetime
 
 # Initialize FastAPI app
-app = FastAPI(title="Idea Islands API")
+app = FastAPI(title="Island Content API")
 
 # Add CORS middleware with settings allowing ALL origins
 app.add_middleware(
@@ -43,26 +42,12 @@ def load_islands():
             return islands_data
     return {}
 
-# Function to get random lines from text content
-def get_random_lines(text, count=3):
-    if not text or not isinstance(text, str) or not text.strip():
-        return []
-
-    # Split text into lines, filtering out empty lines
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-
-    if not lines:
-        return []
-
-    # Get random lines
-    return random.sample(lines, min(count, len(lines)))
-
 # Root route
 @app.get("/")
 async def root():
     return {
-        "message": "Idea Islands API is running",
-        "usage": "Use /api/islands/{island_id}/random to get random ideas from an island"
+        "message": "Island Content API is running",
+        "usage": "Use /api/islands/{island_id} to view an island's content"
     }
 
 # Root route with HTML response
@@ -71,7 +56,7 @@ async def root_html():
     return """
     <html>
         <head>
-            <title>Idea Islands API</title>
+            <title>Island Content API</title>
             <style>
                 body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
                 h1 { color: #333; }
@@ -80,14 +65,11 @@ async def root_html():
             </style>
         </head>
         <body>
-            <h1>Idea Islands API</h1>
+            <h1>Island Content API</h1>
             <p>The API is running successfully. Use the following endpoints:</p>
             <ul>
                 <li class="endpoint">/api/islands - List all islands</li>
-                <li class="endpoint">/api/islands/{island_id}/random - Get random ideas from an island</li>
-                <li class="endpoint">/api/islands/{island_id}/html - Get random ideas in HTML format</li>
-                <li class="endpoint">/api/islands/{island_id}/all - Get all ideas from an island</li>
-                <li class="endpoint">/api/islands/{island_id}/all/html - Get all ideas in HTML format</li>
+                <li class="endpoint">/api/islands/{island_id} - View island content</li>
             </ul>
         </body>
     </html>
@@ -134,8 +116,7 @@ async def list_islands_html():
             <div class="island">
                 <h2>{island['name']}</h2>
                 <p>ID: {island_id}</p>
-                <p>Random ideas URL: <a href="/api/islands/{island_id}/html">/api/islands/{island_id}/html</a></p>
-                <p>All ideas URL: <a href="/api/islands/{island_id}/all/html">/api/islands/{island_id}/all/html</a></p>
+                <p>Content URL: <a href="/api/islands/{island_id}">/api/islands/{island_id}</a></p>
             </div>
             """
 
@@ -146,9 +127,9 @@ async def list_islands_html():
 
     return html
 
-# Get random ideas from a specific island (JSON)
-@app.get("/api/islands/{island_id}/random")
-async def get_random_ideas(island_id: str, count: int = 3):
+# Get island content (JSON)
+@app.get("/api/islands/{island_id}")
+async def get_island_content(island_id: str):
     islands = load_islands()
 
     if island_id not in islands:
@@ -156,20 +137,14 @@ async def get_random_ideas(island_id: str, count: int = 3):
 
     island = islands[island_id]
 
-    # Get random lines
-    random_lines = get_random_lines(island.get("content", ""), count)
-
-    # Format the response
-    formatted_ideas = [f"Idea {i+1}: {line}" for i, line in enumerate(random_lines)]
-
     return {
         "island_name": island["name"],
-        "ideas": formatted_ideas
+        "content": island.get("content", "")
     }
 
-# Get random ideas from a specific island (HTML)
+# Get island content (HTML)
 @app.get("/api/islands/{island_id}/html", response_class=HTMLResponse)
-async def get_random_ideas_html(island_id: str, count: int = 3):
+async def get_island_content_html(island_id: str):
     islands = load_islands()
 
     if island_id not in islands:
@@ -190,138 +165,21 @@ async def get_random_ideas_html(island_id: str, count: int = 3):
         """
 
     island = islands[island_id]
-
-    # Get random lines
-    random_lines = get_random_lines(island.get("content", ""), count)
+    content = island.get("content", "")
 
     html = f"""
     <html>
         <head>
-            <title>Random Ideas from {island["name"]}</title>
+            <title>Island: {island["name"]}</title>
             <style>
                 body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
-                h1 {{ color: #333; }}
-                .idea {{ padding: 10px; margin-bottom: 10px; background-color: #f9f9f9; border-radius: 4px; }}
+                h1 {{ color: #333; margin-bottom: 20px; }}
+                .content {{ white-space: pre-wrap; line-height: 1.5; }}
             </style>
         </head>
         <body>
-            <h1>Random Ideas from Island: {island["name"]}</h1>
-    """
-
-    if not random_lines:
-        html += "<p>No ideas available on this island.</p>"
-    else:
-        for i, line in enumerate(random_lines):
-            html += f"""
-            <div class="idea">
-                <strong>Idea {i+1}:</strong> {line}
-            </div>
-            """
-
-    html += """
-        </body>
-    </html>
-    """
-
-    return html
-
-# Plain text version for maximum compatibility
-@app.get("/api/islands/{island_id}/text")
-async def get_random_ideas_text(island_id: str, count: int = 3):
-    islands = load_islands()
-
-    if island_id not in islands:
-        return {"error": "Island not found"}
-
-    island = islands[island_id]
-
-    # Get random lines
-    random_lines = get_random_lines(island.get("content", ""), count)
-
-    # Build a plain text response
-    response_text = f"Random Ideas from Island: {island['name']}\n\n"
-
-    if not random_lines:
-        response_text += "No ideas available on this island."
-    else:
-        for i, line in enumerate(random_lines):
-            response_text += f"Idea {i+1}: {line}\n"
-
-    return {"text": response_text}
-
-# Get all ideas from a specific island (JSON)
-@app.get("/api/islands/{island_id}/all")
-async def get_all_ideas(island_id: str):
-    islands = load_islands()
-
-    if island_id not in islands:
-        raise HTTPException(status_code=404, detail="Island not found")
-
-    island = islands[island_id]
-
-    # Get all lines
-    lines = [line.strip() for line in island.get("content", "").splitlines() if line.strip()]
-
-    # Format the response
-    formatted_ideas = [f"Idea {i+1}: {line}" for i, line in enumerate(lines)]
-
-    return {
-        "island_name": island["name"],
-        "ideas": formatted_ideas
-    }
-
-# Get all ideas from a specific island (HTML)
-@app.get("/api/islands/{island_id}/all/html", response_class=HTMLResponse)
-async def get_all_ideas_html(island_id: str):
-    islands = load_islands()
-
-    if island_id not in islands:
-        return """
-        <html>
-            <head>
-                <title>Island Not Found</title>
-                <style>
-                    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-                    h1 { color: #d9534f; }
-                </style>
-            </head>
-            <body>
-                <h1>Island Not Found</h1>
-                <p>The requested island does not exist.</p>
-            </body>
-        </html>
-        """
-
-    island = islands[island_id]
-
-    # Get all lines
-    lines = [line.strip() for line in island.get("content", "").splitlines() if line.strip()]
-
-    html = f"""
-    <html>
-        <head>
-            <title>All Ideas from {island["name"]}</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
-                h1 {{ color: #333; }}
-                .idea {{ padding: 10px; margin-bottom: 10px; background-color: #f9f9f9; border-radius: 4px; }}
-            </style>
-        </head>
-        <body>
-            <h1>All Ideas from Island: {island["name"]}</h1>
-    """
-
-    if not lines:
-        html += "<p>No ideas available on this island.</p>"
-    else:
-        for i, line in enumerate(lines):
-            html += f"""
-            <div class="idea">
-                <strong>Idea {i+1}:</strong> {line}
-            </div>
-            """
-
-    html += """
+            <h1>Island: {island["name"]}</h1>
+            <div class="content">{content}</div>
         </body>
     </html>
     """
