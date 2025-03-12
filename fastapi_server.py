@@ -1,16 +1,16 @@
 # fastapi_server.py
-from fastapi import FastAPI, HTTPException, Request, Body
+from fastapi import FastAPI, HTTPException, Request, Response, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List
 import uvicorn
 import json
 import os
 from datetime import datetime
 
 # Initialize FastAPI app
-app = FastAPI(title="Island Content API")
+app = FastAPI(title="Island Content API", docs_url=None, redoc_url=None)
 
 # Add CORS middleware with settings allowing ALL origins
 app.add_middleware(
@@ -60,38 +60,53 @@ def save_islands(islands):
     with open(ISLANDS_FILE, 'w') as f:
         json.dump(islands, f)
 
-# Root route
-@app.get("/")
-async def root():
-    return {
-        "message": "Island Content API is running",
-        "usage": "Use /api/islands/{island_id} to view an island's content"
-    }
-
-# Simple HTML test endpoint
-@app.get("/test", response_class=HTMLResponse)
-async def test_html():
-    return """
+# Function to generate HTML for an island
+def generate_island_html(island_name, content):
+    return f"""
+    <!DOCTYPE html>
     <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Island: {island_name}</title>
+            <style>
+                body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; color: #333; }}
+                h1 {{ color: #333; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }}
+                .content {{ white-space: pre-wrap; line-height: 1.5; }}
+                footer {{ margin-top: 30px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.8em; color: #666; }}
+            </style>
+        </head>
         <body>
-            <h1>HTML Test</h1>
-            <p>This is a simple HTML response test</p>
+            <h1>Island: {island_name}</h1>
+            <div class="content">{content}</div>
+            <footer>Content retrieved from Island Content API</footer>
         </body>
     </html>
     """
 
-# Root route with HTML response
-@app.get("/html", response_class=HTMLResponse)
-async def root_html():
-    return """
+# Handle both GET and HEAD methods for all routes
+@app.api_route("/{full_path:path}", methods=["HEAD"])
+async def head_route(full_path: str):
+    # Simply return a 200 OK response for HEAD requests
+    return Response(status_code=200)
+
+# Root route
+@app.get("/", response_class=HTMLResponse)
+async def root(user_agent: Optional[str] = Header(None)):
+    # Return HTML by default
+    html_content = """
+    <!DOCTYPE html>
     <html>
         <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Island Content API</title>
             <style>
-                body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; color: #333; }
                 h1 { color: #333; }
                 p { line-height: 1.6; }
-                .endpoint { background-color: #f4f4f4; padding: 10px; border-radius: 4px; font-family: monospace; }
+                .endpoint { background-color: #f4f4f4; padding: 10px; border-radius: 4px; font-family: monospace; margin-bottom: 10px; }
+                footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.8em; color: #666; }
             </style>
         </head>
         <body>
@@ -99,43 +114,35 @@ async def root_html():
             <p>The API is running successfully. Use the following endpoints:</p>
             <ul>
                 <li class="endpoint">/api/islands - List all islands</li>
-                <li class="endpoint">/api/islands/{island_id} - View island content (JSON)</li>
-                <li class="endpoint">/api/islands/{island_id}/html - View island content (HTML)</li>
-                <li class="endpoint">/api/islands/{island_id}/text - View island content (Plain Text)</li>
-                <li class="endpoint">/api/islands/{island_id}/update - Update island content</li>
-                <li class="endpoint">/api/islands/sync - Sync all islands data</li>
+                <li class="endpoint">/api/islands/{island_id} - View island content</li>
             </ul>
+            <footer>Island Content API - Web scraper friendly</footer>
         </body>
     </html>
     """
+    return HTMLResponse(content=html_content)
 
 # List all islands
-@app.get("/api/islands")
-async def list_islands():
-    islands = load_islands()
-    result = []
-
-    for island_id, island in islands.items():
-        result.append({
-            "id": island_id,
-            "name": island["name"]
-        })
-
-    return result
-
-# HTML version of islands list
-@app.get("/api/islands/html", response_class=HTMLResponse)
-async def list_islands_html():
+@app.get("/api/islands", response_class=HTMLResponse)
+async def list_islands(user_agent: Optional[str] = Header(None)):
     islands = load_islands()
 
+    # Return HTML by default
     html = """
+    <!DOCTYPE html>
     <html>
         <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Islands List</title>
             <style>
-                body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; color: #333; }
                 h1 { color: #333; }
-                .island { margin-bottom: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+                .island { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; }
+                .island h2 { margin-top: 0; }
+                a { color: #0366d6; text-decoration: none; }
+                a:hover { text-decoration: underline; }
+                footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.8em; color: #666; }
             </style>
         </head>
         <body>
@@ -149,23 +156,61 @@ async def list_islands_html():
             html += f"""
             <div class="island">
                 <h2>{island['name']}</h2>
-                <p>ID: {island_id}</p>
-                <p>Content URL: <a href="/api/islands/{island_id}">/api/islands/{island_id}</a></p>
-                <p>HTML URL: <a href="/api/islands/{island_id}/html">/api/islands/{island_id}/html</a></p>
-                <p>Text URL: <a href="/api/islands/{island_id}/text">/api/islands/{island_id}/text</a></p>
+                <p><strong>ID:</strong> {island_id}</p>
+                <p><a href="/api/islands/{island_id}">View island content</a></p>
             </div>
             """
 
     html += """
+            <footer>Island Content API - Web scraper friendly</footer>
         </body>
     </html>
     """
 
-    return html
+    return HTMLResponse(content=html)
 
-# Get island content (JSON)
-@app.get("/api/islands/{island_id}")
-async def get_island_content(island_id: str):
+# Get island content
+@app.get("/api/islands/{island_id}", response_class=HTMLResponse)
+async def get_island_content(island_id: str, user_agent: Optional[str] = Header(None)):
+    islands = load_islands()
+
+    if island_id not in islands:
+        return HTMLResponse(
+            content="""
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <meta charset="utf-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Island Not Found</title>
+                    <style>
+                        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; color: #333; }
+                        h1 { color: #d9534f; }
+                        footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.8em; color: #666; }
+                    </style>
+                </head>
+                <body>
+                    <h1>Island Not Found</h1>
+                    <p>The requested island does not exist.</p>
+                    <p><a href="/api/islands">Back to island list</a></p>
+                    <footer>Island Content API - Web scraper friendly</footer>
+                </body>
+            </html>
+            """,
+            status_code=404
+        )
+
+    island = islands[island_id]
+    content = island.get("content", "")
+
+    html_content = generate_island_html(island["name"], content)
+    return HTMLResponse(content=html_content)
+
+# JSON API endpoints (for programmatic access)
+
+# Get island content in JSON
+@app.get("/api/json/islands/{island_id}")
+async def get_island_content_json(island_id: str):
     islands = load_islands()
 
     if island_id not in islands:
@@ -178,50 +223,12 @@ async def get_island_content(island_id: str):
         "content": island.get("content", "")
     }
 
-# Simple plain text endpoint - most reliable
-@app.get("/api/islands/{island_id}/text", response_class=PlainTextResponse)
-async def get_island_content_text(island_id: str):
-    islands = load_islands()
-
-    if island_id not in islands:
-        return "Island not found"
-
-    island = islands[island_id]
-    content = island.get("content", "")
-
-    return f"Island: {island['name']}\n\n{content}"
-
-# Simplified HTML endpoint
-@app.get("/api/islands/{island_id}/html")
-async def get_island_content_html(island_id: str):
-    islands = load_islands()
-
-    if island_id not in islands:
-        return HTMLResponse(content="<html><body><h1>Island Not Found</h1></body></html>")
-
-    island = islands[island_id]
-    content = island.get("content", "")
-
-    html_content = f"""
-    <html>
-        <head>
-            <title>Island: {island["name"]}</title>
-        </head>
-        <body>
-            <h1>Island: {island["name"]}</h1>
-            <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">{content}</pre>
-        </body>
-    </html>
-    """
-
-    return HTMLResponse(content=html_content)
-
 # Create a new island
 @app.post("/api/islands/create")
 async def create_island(island: IslandCreate):
     islands = load_islands()
 
-    # Generate a unique ID (simple UUID implementation)
+    # Generate a unique ID
     import uuid
     island_id = str(uuid.uuid4())
 
