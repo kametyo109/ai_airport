@@ -138,11 +138,11 @@ def main():
         st.markdown("""
         ### How to Access Islands with ChatGPT
 
-        Each island has a unique API endpoint that ChatGPT can access. Use ChatGPT's task feature to fetch random ideas from your islands.
+        Each island has a unique API endpoint that ChatGPT can access. Use ChatGPT's task feature to fetch ideas from your islands.
 
         **Usage Instructions:**
         1. Enter each idea on a separate line in your island's content
-        2. When ChatGPT visits the API endpoint, it will receive 3 randomly selected ideas
+        2. When ChatGPT visits the API endpoint, it will receive ideas from your island
 
         **Important:** Make sure to enter your FastAPI URL below (not your Streamlit URL)
         """)
@@ -164,12 +164,14 @@ def main():
             # Display a table with island names and their API endpoints
             data = []
             for island_id, island in st.session_state.islands.items():
-                # Use the HTML endpoint for better ChatGPT compatibility
-                api_url = f"{api_base_url}/api/islands/{island_id}/html"
+                # URLs for different endpoints
+                random_html_url = f"{api_base_url}/api/islands/{island_id}/html"
+                all_html_url = f"{api_base_url}/api/islands/{island_id}/all/html"
+
                 data.append({
                     "Island Name": island['name'],
-                    "API URL": api_url,
-                    "ChatGPT Instruction": f"Please visit {api_url} and return the random ideas from this island named \"{island['name']}\"."
+                    "Random Ideas URL": random_html_url,
+                    "All Ideas URL": all_html_url
                 })
 
             # If there are islands, display them in a dataframe
@@ -181,13 +183,26 @@ def main():
                 st.markdown("### Individual Islands")
                 for island_id, island in st.session_state.islands.items():
                     with st.expander(f"🏝️ {island['name']}"):
-                        # Use the HTML endpoint for better compatibility with ChatGPT
-                        api_url = f"{api_base_url}/api/islands/{island_id}/html"
-                        st.code(api_url)
-                        st.markdown("**ChatGPT Instruction:**")
+                        # Random ideas endpoint
+                        random_api_url = f"{api_base_url}/api/islands/{island_id}/html"
+                        st.markdown("**Random Ideas Endpoint:**")
+                        st.code(random_api_url)
+
+                        # All ideas endpoint
+                        all_api_url = f"{api_base_url}/api/islands/{island_id}/all/html"
+                        st.markdown("**All Ideas Endpoint:**")
+                        st.code(all_api_url)
+
+                        st.markdown("**ChatGPT Instructions:**")
                         st.markdown(f"""
+                        For random ideas:
                         ```
-                        Please visit {api_url} and return the random ideas from this island named "{island['name']}".
+                        Please visit {random_api_url} and return the random ideas from this island named "{island['name']}".
+                        ```
+
+                        For all ideas:
+                        ```
+                        Please visit {all_api_url} and return all the ideas from this island named "{island['name']}".
                         ```
                         """)
             else:
@@ -207,7 +222,7 @@ def main():
         To use ideas created here with ChatGPT, you need to:
 
         1. Create and edit your islands in this Streamlit app
-        2. Copy the content manually to your FastAPI server
+        2. Copy the content manually to your FastAPI server on Render or vice versa
 
         For a production setup, consider using a shared database like MongoDB Atlas.
         """)

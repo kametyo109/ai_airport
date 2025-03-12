@@ -86,6 +86,8 @@ async def root_html():
                 <li class="endpoint">/api/islands - List all islands</li>
                 <li class="endpoint">/api/islands/{island_id}/random - Get random ideas from an island</li>
                 <li class="endpoint">/api/islands/{island_id}/html - Get random ideas in HTML format</li>
+                <li class="endpoint">/api/islands/{island_id}/all - Get all ideas from an island</li>
+                <li class="endpoint">/api/islands/{island_id}/all/html - Get all ideas in HTML format</li>
             </ul>
         </body>
     </html>
@@ -133,6 +135,7 @@ async def list_islands_html():
                 <h2>{island['name']}</h2>
                 <p>ID: {island_id}</p>
                 <p>Random ideas URL: <a href="/api/islands/{island_id}/html">/api/islands/{island_id}/html</a></p>
+                <p>All ideas URL: <a href="/api/islands/{island_id}/all/html">/api/islands/{island_id}/all/html</a></p>
             </div>
             """
 
@@ -245,6 +248,85 @@ async def get_random_ideas_text(island_id: str, count: int = 3):
             response_text += f"Idea {i+1}: {line}\n"
 
     return {"text": response_text}
+
+# Get all ideas from a specific island (JSON)
+@app.get("/api/islands/{island_id}/all")
+async def get_all_ideas(island_id: str):
+    islands = load_islands()
+
+    if island_id not in islands:
+        raise HTTPException(status_code=404, detail="Island not found")
+
+    island = islands[island_id]
+
+    # Get all lines
+    lines = [line.strip() for line in island.get("content", "").splitlines() if line.strip()]
+
+    # Format the response
+    formatted_ideas = [f"Idea {i+1}: {line}" for i, line in enumerate(lines)]
+
+    return {
+        "island_name": island["name"],
+        "ideas": formatted_ideas
+    }
+
+# Get all ideas from a specific island (HTML)
+@app.get("/api/islands/{island_id}/all/html", response_class=HTMLResponse)
+async def get_all_ideas_html(island_id: str):
+    islands = load_islands()
+
+    if island_id not in islands:
+        return """
+        <html>
+            <head>
+                <title>Island Not Found</title>
+                <style>
+                    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+                    h1 { color: #d9534f; }
+                </style>
+            </head>
+            <body>
+                <h1>Island Not Found</h1>
+                <p>The requested island does not exist.</p>
+            </body>
+        </html>
+        """
+
+    island = islands[island_id]
+
+    # Get all lines
+    lines = [line.strip() for line in island.get("content", "").splitlines() if line.strip()]
+
+    html = f"""
+    <html>
+        <head>
+            <title>All Ideas from {island["name"]}</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
+                h1 {{ color: #333; }}
+                .idea {{ padding: 10px; margin-bottom: 10px; background-color: #f9f9f9; border-radius: 4px; }}
+            </style>
+        </head>
+        <body>
+            <h1>All Ideas from Island: {island["name"]}</h1>
+    """
+
+    if not lines:
+        html += "<p>No ideas available on this island.</p>"
+    else:
+        for i, line in enumerate(lines):
+            html += f"""
+            <div class="idea">
+                <strong>Idea {i+1}:</strong> {line}
+            </div>
+            """
+
+    html += """
+        </body>
+    </html>
+    """
+
+    return html
 
 # Run the FastAPI server when this file is executed directly
 if __name__ == "__main__":
