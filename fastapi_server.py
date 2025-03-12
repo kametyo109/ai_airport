@@ -1,7 +1,7 @@
 # fastapi_server.py
 from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from typing import Dict, Optional, Any
 import uvicorn
@@ -68,6 +68,18 @@ async def root():
         "usage": "Use /api/islands/{island_id} to view an island's content"
     }
 
+# Simple HTML test endpoint
+@app.get("/test", response_class=HTMLResponse)
+async def test_html():
+    return """
+    <html>
+        <body>
+            <h1>HTML Test</h1>
+            <p>This is a simple HTML response test</p>
+        </body>
+    </html>
+    """
+
 # Root route with HTML response
 @app.get("/html", response_class=HTMLResponse)
 async def root_html():
@@ -87,7 +99,9 @@ async def root_html():
             <p>The API is running successfully. Use the following endpoints:</p>
             <ul>
                 <li class="endpoint">/api/islands - List all islands</li>
-                <li class="endpoint">/api/islands/{island_id} - View island content</li>
+                <li class="endpoint">/api/islands/{island_id} - View island content (JSON)</li>
+                <li class="endpoint">/api/islands/{island_id}/html - View island content (HTML)</li>
+                <li class="endpoint">/api/islands/{island_id}/text - View island content (Plain Text)</li>
                 <li class="endpoint">/api/islands/{island_id}/update - Update island content</li>
                 <li class="endpoint">/api/islands/sync - Sync all islands data</li>
             </ul>
@@ -137,6 +151,8 @@ async def list_islands_html():
                 <h2>{island['name']}</h2>
                 <p>ID: {island_id}</p>
                 <p>Content URL: <a href="/api/islands/{island_id}">/api/islands/{island_id}</a></p>
+                <p>HTML URL: <a href="/api/islands/{island_id}/html">/api/islands/{island_id}/html</a></p>
+                <p>Text URL: <a href="/api/islands/{island_id}/text">/api/islands/{island_id}/text</a></p>
             </div>
             """
 
@@ -162,49 +178,43 @@ async def get_island_content(island_id: str):
         "content": island.get("content", "")
     }
 
-# Get island content (HTML)
-@app.get("/api/islands/{island_id}/html", response_class=HTMLResponse)
-async def get_island_content_html(island_id: str):
+# Simple plain text endpoint - most reliable
+@app.get("/api/islands/{island_id}/text", response_class=PlainTextResponse)
+async def get_island_content_text(island_id: str):
     islands = load_islands()
 
     if island_id not in islands:
-        return """
-        <html>
-            <head>
-                <title>Island Not Found</title>
-                <style>
-                    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-                    h1 { color: #d9534f; }
-                </style>
-            </head>
-            <body>
-                <h1>Island Not Found</h1>
-                <p>The requested island does not exist.</p>
-            </body>
-        </html>
-        """
+        return "Island not found"
 
     island = islands[island_id]
     content = island.get("content", "")
 
-    html = f"""
+    return f"Island: {island['name']}\n\n{content}"
+
+# Simplified HTML endpoint
+@app.get("/api/islands/{island_id}/html")
+async def get_island_content_html(island_id: str):
+    islands = load_islands()
+
+    if island_id not in islands:
+        return HTMLResponse(content="<html><body><h1>Island Not Found</h1></body></html>")
+
+    island = islands[island_id]
+    content = island.get("content", "")
+
+    html_content = f"""
     <html>
         <head>
             <title>Island: {island["name"]}</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
-                h1 {{ color: #333; margin-bottom: 20px; }}
-                .content {{ white-space: pre-wrap; line-height: 1.5; }}
-            </style>
         </head>
         <body>
             <h1>Island: {island["name"]}</h1>
-            <div class="content">{content}</div>
+            <pre style="white-space: pre-wrap; font-family: Arial, sans-serif;">{content}</pre>
         </body>
     </html>
     """
 
-    return html
+    return HTMLResponse(content=html_content)
 
 # Create a new island
 @app.post("/api/islands/create")
