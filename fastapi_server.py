@@ -1,7 +1,9 @@
 # fastapi_server.py
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel
+from typing import Dict, Optional, Any
 import uvicorn
 import json
 import os
@@ -22,6 +24,17 @@ app.add_middleware(
 # Path to the shared data file
 ISLANDS_FILE = 'islands.json'
 
+# Models for API requests
+class IslandCreate(BaseModel):
+    name: str
+
+class IslandUpdate(BaseModel):
+    name: Optional[str] = None
+    content: Optional[str] = None
+
+class IslandData(BaseModel):
+    islands: Dict[str, Any]
+
 # Function to load islands from file
 def load_islands():
     if os.path.exists(ISLANDS_FILE):
@@ -41,6 +54,11 @@ def load_islands():
 
             return islands_data
     return {}
+
+# Function to save islands to file
+def save_islands(islands):
+    with open(ISLANDS_FILE, 'w') as f:
+        json.dump(islands, f)
 
 # Root route
 @app.get("/")
@@ -70,6 +88,8 @@ async def root_html():
             <ul>
                 <li class="endpoint">/api/islands - List all islands</li>
                 <li class="endpoint">/api/islands/{island_id} - View island content</li>
+                <li class="endpoint">/api/islands/{island_id}/update - Update island content</li>
+                <li class="endpoint">/api/islands/sync - Sync all islands data</li>
             </ul>
         </body>
     </html>
@@ -185,6 +205,89 @@ async def get_island_content_html(island_id: str):
     """
 
     return html
+
+# Create a new island
+@app.post("/api/islands/create")
+async def create_island(island: IslandCreate):
+    islands = load_islands()
+
+    # Generate a unique ID (simple UUID implementation)
+    import uuid
+    island_id = str(uuid.uuid4())
+
+    # Create the island
+    islands[island_id] = {
+        "name": island.name,
+        "content": "",
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat()
+    }
+
+    save_islands(islands)
+
+    return {
+        "success": True,
+        "id": island_id,
+        "name": island.name
+    }
+
+# Update island content
+@app.post("/api/islands/{island_id}/update")
+async def update_island(island_id: str, update_data: IslandUpdate):
+    islands = load_islands()
+
+    if island_id not in islands:
+        raise HTTPException(status_code=404, detail="Island not found")
+
+    # Update fields if provided
+    if update_data.name is not None:
+        islands[island_id]["name"] = update_data.name
+
+    if update_data.content is not None:
+        islands[island_id]["content"] = update_data.content
+
+    # Update the timestamp
+    islands[island_id]["updated_at"] = datetime.now().isoformat()
+
+    save_islands(islands)
+
+    return {
+        "success": True,
+        "id": island_id,
+        "updated": {
+            "name": update_data.name is not None,
+            "content": update_data.content is not None
+        }
+    }
+
+# Delete an island
+@app.delete("/api/islands/{island_id}/delete")
+async def delete_island(island_id: str):
+    islands = load_islands()
+
+    if island_id not in islands:
+        raise HTTPException(status_code=404, detail="Island not found")
+
+    # Delete the island
+    del islands[island_id]
+
+    save_islands(islands)
+
+    return {
+        "success": True,
+        "id": island_id
+    }
+
+# Sync all islands data
+@app.post("/api/islands/sync")
+async def sync_islands(data: IslandData):
+    # Replace all islands with the provided data
+    save_islands(data.islands)
+
+    return {
+        "success": True,
+        "message": "Islands data synchronized successfully"
+    }
 
 # Run the FastAPI server when this file is executed directly
 if __name__ == "__main__":
