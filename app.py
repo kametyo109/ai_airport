@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import random
 import uuid
@@ -6,34 +5,15 @@ from datetime import datetime
 import json
 import os
 import pandas as pd
-import uvicorn
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-import threading
-import nest_asyncio
 
-# Apply nest_asyncio to allow running asyncio code in Streamlit
-nest_asyncio.apply()
-
-# Initialize FastAPI app
-app = FastAPI()
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Shared data file
-ISLANDS_FILE = 'islands.json'
+# Initialize session state for islands if not exists
+if 'islands' not in st.session_state:
+    st.session_state.islands = {}
 
 # Function to load islands from file
 def load_islands():
-    if os.path.exists(ISLANDS_FILE):
-        with open(ISLANDS_FILE, 'r') as f:
+    if os.path.exists('islands.json'):
+        with open('islands.json', 'r') as f:
             islands_data = json.load(f)
             # Migrate old format to new format if needed
             for island_id, island in islands_data.items():
@@ -55,10 +35,41 @@ def load_islands():
 
 # Function to save islands to file
 def save_islands(islands):
-    with open(ISLANDS_FILE, 'w') as f:
+    with open('islands.json', 'w') as f:
         json.dump(islands, f)
 
-# Function to get random lines from text
+# Load islands at startup
+if not st.session_state.islands:
+    st.session_state.islands = load_islands()
+
+def create_island():
+    """Create a new island with a unique ID"""
+    island_id = str(uuid.uuid4())
+    island_name = st.session_state.new_island_name
+
+    if not island_name:
+        st.error("Please enter an island name.")
+        return
+
+    st.session_state.islands[island_id] = {
+        "name": island_name,
+        "content": "",
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat()
+    }
+    save_islands(st.session_state.islands)
+    st.session_state.new_island_name = ""
+    st.success(f"Island '{island_name}' created successfully!")
+
+def update_island_content(island_id):
+    """Update an island's content"""
+    content = st.session_state.get(f"island_content_{island_id}", "")
+
+    st.session_state.islands[island_id]["content"] = content
+    st.session_state.islands[island_id]["updated_at"] = datetime.now().isoformat()
+    save_islands(st.session_state.islands)
+    st.success("Content updated successfully!")
+
 def get_random_lines(text, count=3):
     """Get random lines from a text blob"""
     if not text or not isinstance(text, str) or not text.strip():
@@ -73,82 +84,18 @@ def get_random_lines(text, count=3):
     # Get random lines
     return random.sample(lines, min(count, len(lines)))
 
-# FastAPI routes
-@app.get("/")
-async def root():
-    return {"message": "Idea Islands API is running. Use /api/islands/{island_id}/random to get random ideas."}
-
-@app.get("/api/islands/{island_id}/random")
-async def get_random_ideas(island_id: str, count: int = 3):
-    # Load islands data
-    islands = load_islands()
-
-    if island_id not in islands:
-        raise HTTPException(status_code=404, detail="Island not found")
-
-    island = islands[island_id]
-
-    # Get random lines
-    random_lines = get_random_lines(island.get("content", ""), count)
-
-    # Return formatted response
-    return {
-        "island_name": island["name"],
-        "ideas": [f"Idea {i+1}: {line}" for i, line in enumerate(random_lines)]
-    }
-
-# Streamlit app functions
-def create_island():
-    """Create a new island with a unique ID"""
-    island_id = str(uuid.uuid4())
-    island_name = st.session_state.new_island_name
-
-    if not island_name:
-        st.error("Please enter an island name.")
-        return
-
-    # Load islands, update, save
-    islands = load_islands()
-    islands[island_id] = {
-        "name": island_name,
-        "content": "",
-        "created_at": datetime.now().isoformat(),
-        "updated_at": datetime.now().isoformat()
-    }
-    save_islands(islands)
-
-    st.session_state.new_island_name = ""
-    st.success(f"Island '{island_name}' created successfully!")
-
-def update_island_content(island_id):
-    """Update an island's content"""
-    content = st.session_state.get(f"island_content_{island_id}", "")
-
-    # Load islands, update, save
-    islands = load_islands()
-    if island_id in islands:
-        islands[island_id]["content"] = content
-        islands[island_id]["updated_at"] = datetime.now().isoformat()
-        save_islands(islands)
-        st.success("Content updated successfully!")
-    else:
-        st.error("Island not found!")
-
-def streamlit_app():
+def main():
     st.title("Idea Islands")
-
-    # Always reload islands from file to ensure sync with FastAPI
-    islands = load_islands()
 
     tab1, tab2, tab3 = st.tabs(["Islands Dashboard", "Create Island", "API Access"])
 
     with tab1:
         st.header("Your Islands")
 
-        if not islands:
+        if not st.session_state.islands:
             st.info("You don't have any islands yet. Create one in the 'Create Island' tab!")
         else:
-            for island_id, island in islands.items():
+            for island_id, island in st.session_state.islands.items():
                 with st.expander(f"🏝️ {island['name']} (ID: {island_id})"):
                     # Ensure content key exists (for backwards compatibility)
                     if 'content' not in island:
@@ -195,23 +142,30 @@ def streamlit_app():
 
         **Usage Instructions:**
         1. Enter each idea on a separate line in your island's content
-        2. When ChatGPT visits the API endpoint, it will receive 3 randomly selected ideas in JSON format
+        2. When ChatGPT visits the API endpoint, it will receive 3 randomly selected ideas
 
-        **API Endpoints:**
+        **Important:** Make sure to enter your FastAPI URL below (not your Streamlit URL)
         """)
 
-        # Get the hostname from Streamlit's config
-        fastapi_port = 8000  # The port FastAPI will run on
-        api_base_url = st.text_input("Your FastAPI base URL (e.g., https://your-app-domain.com:8000 or http://localhost:8000)",
-                             placeholder="Enter your deployed FastAPI base URL")
+        # Get the FastAPI base URL - this needs to point to your Render deployment
+        api_base_url = st.text_input(
+            "Your FastAPI base URL (e.g., https://ai-airport.onrender.com)",
+            placeholder="Enter your deployed FastAPI base URL (no trailing slash)",
+            help="This should be your Render API URL, not your Streamlit URL"
+        )
 
         if api_base_url:
+            # Remove trailing slash if present
+            if api_base_url.endswith('/'):
+                api_base_url = api_base_url[:-1]
+
             st.markdown("### Your Island API Links")
 
             # Display a table with island names and their API endpoints
             data = []
-            for island_id, island in islands.items():
-                api_url = f"{api_base_url}/api/islands/{island_id}/random"
+            for island_id, island in st.session_state.islands.items():
+                # Use the HTML endpoint for better ChatGPT compatibility
+                api_url = f"{api_base_url}/api/islands/{island_id}/html"
                 data.append({
                     "Island Name": island['name'],
                     "API URL": api_url,
@@ -225,9 +179,10 @@ def streamlit_app():
 
                 # Also provide individual sections for easy copy-paste
                 st.markdown("### Individual Islands")
-                for island_id, island in islands.items():
+                for island_id, island in st.session_state.islands.items():
                     with st.expander(f"🏝️ {island['name']}"):
-                        api_url = f"{api_base_url}/api/islands/{island_id}/random"
+                        # Use the HTML endpoint for better compatibility with ChatGPT
+                        api_url = f"{api_base_url}/api/islands/{island_id}/html"
                         st.code(api_url)
                         st.markdown("**ChatGPT Instruction:**")
                         st.markdown(f"""
@@ -238,30 +193,24 @@ def streamlit_app():
             else:
                 st.info("You don't have any islands yet. Create one in the 'Create Island' tab!")
         else:
-            st.info("Enter your FastAPI base URL to see the API endpoints ChatGPT can access.")
+            st.warning("Please enter your FastAPI base URL (from Render) to see the API endpoints.")
 
-        # Information on how to run the FastAPI server
+        # Info about data sharing between platforms
         st.markdown("""
-        ### Running the FastAPI Server
+        ### Important Note About Data Storage
 
-        To make the API endpoints available, you need to run the FastAPI server:
+        Your islands data is stored locally in each platform:
 
-        ```bash
-        # In one terminal, run Streamlit
-        streamlit run app.py
+        - Data created in Streamlit Cloud stays in Streamlit Cloud
+        - Data created in your FastAPI server on Render stays on Render
 
-        # In another terminal, run the FastAPI server
-        python fastapi_server.py
-        ```
+        To use ideas created here with ChatGPT, you need to:
 
-        If you're deploying to a hosting service, you'll need to ensure both Streamlit and FastAPI are running.
+        1. Create and edit your islands in this Streamlit app
+        2. Copy the content manually to your FastAPI server
+
+        For a production setup, consider using a shared database like MongoDB Atlas.
         """)
 
-# Start FastAPI in a separate thread when running locally
-def run_fastapi():
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
-# Main entry point
 if __name__ == "__main__":
-    # Start the Streamlit app
-    streamlit_app()
+    main()
