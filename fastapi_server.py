@@ -60,155 +60,141 @@ def save_islands(islands):
     with open(ISLANDS_FILE, 'w') as f:
         json.dump(islands, f)
 
-# Function to generate HTML for an island
-def generate_island_html(island_name, content):
-    return f"""
-    <!DOCTYPE html>
-    <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Island: {island_name}</title>
-            <style>
-                body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; color: #333; }}
-                h1 {{ color: #333; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }}
-                .content {{ white-space: pre-wrap; line-height: 1.5; }}
-                footer {{ margin-top: 30px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.8em; color: #666; }}
-            </style>
-        </head>
-        <body>
-            <h1>Island: {island_name}</h1>
-            <div class="content">{content}</div>
-            <footer>Content retrieved from Island Content API</footer>
-        </body>
-    </html>
-    """
+# Basic HTML wrapper for content
+def html_wrapper(title, body_content):
+    return f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{title}</title>
+</head>
+<body>
+    {body_content}
+</body>
+</html>"""
 
 # Handle both GET and HEAD methods for all routes
 @app.api_route("/{full_path:path}", methods=["HEAD"])
 async def head_route(full_path: str):
-    # Simply return a 200 OK response for HEAD requests
-    return Response(status_code=200)
+    # Return a 200 OK response with proper headers for HEAD requests
+    return Response(
+        status_code=200,
+        headers={
+            "Content-Type": "text/html; charset=utf-8",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS"
+        }
+    )
+
+# Simple test endpoint
+@app.get("/test")
+async def test_endpoint():
+    html_content = html_wrapper(
+        "Test Page",
+        "<h1>Test Page</h1><p>This is a simple test page.</p>"
+    )
+    return HTMLResponse(
+        content=html_content,
+        headers={"Content-Type": "text/html; charset=utf-8"}
+    )
 
 # Root route
-@app.get("/", response_class=HTMLResponse)
-async def root(user_agent: Optional[str] = Header(None)):
-    # Return HTML by default
-    html_content = """
-    <!DOCTYPE html>
-    <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Island Content API</title>
-            <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; color: #333; }
-                h1 { color: #333; }
-                p { line-height: 1.6; }
-                .endpoint { background-color: #f4f4f4; padding: 10px; border-radius: 4px; font-family: monospace; margin-bottom: 10px; }
-                footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.8em; color: #666; }
-            </style>
-        </head>
-        <body>
-            <h1>Island Content API</h1>
-            <p>The API is running successfully. Use the following endpoints:</p>
-            <ul>
-                <li class="endpoint">/api/islands - List all islands</li>
-                <li class="endpoint">/api/islands/{island_id} - View island content</li>
-            </ul>
-            <footer>Island Content API - Web scraper friendly</footer>
-        </body>
-    </html>
+@app.get("/")
+async def root():
+    body_content = """
+    <h1>Island Content API</h1>
+    <p>The API is running successfully. Use the following endpoints:</p>
+    <ul>
+        <li>/api/islands - List all islands</li>
+        <li>/api/islands/{island_id} - View island content</li>
+    </ul>
     """
-    return HTMLResponse(content=html_content)
+    html_content = html_wrapper("Island Content API", body_content)
+    return HTMLResponse(
+        content=html_content,
+        headers={"Content-Type": "text/html; charset=utf-8"}
+    )
 
 # List all islands
-@app.get("/api/islands", response_class=HTMLResponse)
-async def list_islands(user_agent: Optional[str] = Header(None)):
+@app.get("/api/islands")
+async def list_islands():
     islands = load_islands()
 
-    # Return HTML by default
-    html = """
-    <!DOCTYPE html>
-    <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Islands List</title>
-            <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; color: #333; }
-                h1 { color: #333; }
-                .island { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 4px; }
-                .island h2 { margin-top: 0; }
-                a { color: #0366d6; text-decoration: none; }
-                a:hover { text-decoration: underline; }
-                footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.8em; color: #666; }
-            </style>
-        </head>
-        <body>
-            <h1>Available Islands</h1>
-    """
+    # Build the HTML body content
+    body_content = "<h1>Available Islands</h1>"
 
     if not islands:
-        html += "<p>No islands found.</p>"
+        body_content += "<p>No islands found.</p>"
     else:
         for island_id, island in islands.items():
-            html += f"""
-            <div class="island">
+            body_content += f"""
+            <div>
                 <h2>{island['name']}</h2>
                 <p><strong>ID:</strong> {island_id}</p>
                 <p><a href="/api/islands/{island_id}">View island content</a></p>
             </div>
             """
 
-    html += """
-            <footer>Island Content API - Web scraper friendly</footer>
-        </body>
-    </html>
-    """
-
-    return HTMLResponse(content=html)
+    html_content = html_wrapper("Islands List", body_content)
+    return HTMLResponse(
+        content=html_content,
+        headers={"Content-Type": "text/html; charset=utf-8"}
+    )
 
 # Get island content
-@app.get("/api/islands/{island_id}", response_class=HTMLResponse)
-async def get_island_content(island_id: str, user_agent: Optional[str] = Header(None)):
+@app.get("/api/islands/{island_id}")
+async def get_island_content(island_id: str):
     islands = load_islands()
 
     if island_id not in islands:
+        not_found_content = html_wrapper(
+            "Island Not Found",
+            "<h1>Island Not Found</h1><p>The requested island does not exist.</p>"
+        )
         return HTMLResponse(
-            content="""
-            <!DOCTYPE html>
-            <html>
-                <head>
-                    <meta charset="utf-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Island Not Found</title>
-                    <style>
-                        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; padding: 20px; max-width: 800px; margin: 0 auto; color: #333; }
-                        h1 { color: #d9534f; }
-                        footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #eee; font-size: 0.8em; color: #666; }
-                    </style>
-                </head>
-                <body>
-                    <h1>Island Not Found</h1>
-                    <p>The requested island does not exist.</p>
-                    <p><a href="/api/islands">Back to island list</a></p>
-                    <footer>Island Content API - Web scraper friendly</footer>
-                </body>
-            </html>
-            """,
-            status_code=404
+            content=not_found_content,
+            status_code=404,
+            headers={"Content-Type": "text/html; charset=utf-8"}
         )
 
     island = islands[island_id]
     content = island.get("content", "")
 
-    html_content = generate_island_html(island["name"], content)
-    return HTMLResponse(content=html_content)
+    # Convert line breaks to <br> tags for proper HTML display
+    formatted_content = content.replace('\n', '<br>\n')
 
-# JSON API endpoints (for programmatic access)
+    body_content = f"""
+    <h1>Island: {island["name"]}</h1>
+    <div>{formatted_content}</div>
+    """
 
-# Get island content in JSON
+    html_content = html_wrapper(f"Island: {island['name']}", body_content)
+    return HTMLResponse(
+        content=html_content,
+        headers={"Content-Type": "text/html; charset=utf-8"}
+    )
+
+# Plain text version of island content
+@app.get("/api/islands/{island_id}/text")
+async def get_island_content_text(island_id: str):
+    islands = load_islands()
+
+    if island_id not in islands:
+        return PlainTextResponse(
+            content="Island not found",
+            status_code=404,
+            headers={"Content-Type": "text/plain; charset=utf-8"}
+        )
+
+    island = islands[island_id]
+    content = island.get("content", "")
+
+    return PlainTextResponse(
+        content=f"Island: {island['name']}\n\n{content}",
+        headers={"Content-Type": "text/plain; charset=utf-8"}
+    )
+
+# Get island content in JSON format
 @app.get("/api/json/islands/{island_id}")
 async def get_island_content_json(island_id: str):
     islands = load_islands()
@@ -218,10 +204,13 @@ async def get_island_content_json(island_id: str):
 
     island = islands[island_id]
 
-    return {
-        "island_name": island["name"],
-        "content": island.get("content", "")
-    }
+    return JSONResponse(
+        content={
+            "island_name": island["name"],
+            "content": island.get("content", "")
+        },
+        headers={"Content-Type": "application/json"}
+    )
 
 # Create a new island
 @app.post("/api/islands/create")
@@ -242,11 +231,13 @@ async def create_island(island: IslandCreate):
 
     save_islands(islands)
 
-    return {
-        "success": True,
-        "id": island_id,
-        "name": island.name
-    }
+    return JSONResponse(
+        content={
+            "success": True,
+            "id": island_id,
+            "name": island.name
+        }
+    )
 
 # Update island content
 @app.post("/api/islands/{island_id}/update")
@@ -268,14 +259,16 @@ async def update_island(island_id: str, update_data: IslandUpdate):
 
     save_islands(islands)
 
-    return {
-        "success": True,
-        "id": island_id,
-        "updated": {
-            "name": update_data.name is not None,
-            "content": update_data.content is not None
+    return JSONResponse(
+        content={
+            "success": True,
+            "id": island_id,
+            "updated": {
+                "name": update_data.name is not None,
+                "content": update_data.content is not None
+            }
         }
-    }
+    )
 
 # Delete an island
 @app.delete("/api/islands/{island_id}/delete")
@@ -290,10 +283,12 @@ async def delete_island(island_id: str):
 
     save_islands(islands)
 
-    return {
-        "success": True,
-        "id": island_id
-    }
+    return JSONResponse(
+        content={
+            "success": True,
+            "id": island_id
+        }
+    )
 
 # Sync all islands data
 @app.post("/api/islands/sync")
@@ -301,10 +296,12 @@ async def sync_islands(data: IslandData):
     # Replace all islands with the provided data
     save_islands(data.islands)
 
-    return {
-        "success": True,
-        "message": "Islands data synchronized successfully"
-    }
+    return JSONResponse(
+        content={
+            "success": True,
+            "message": "Islands data synchronized successfully"
+        }
+    )
 
 # Run the FastAPI server when this file is executed directly
 if __name__ == "__main__":
